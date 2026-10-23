@@ -9,7 +9,8 @@ Hecho con IA (Claude, de Anthropic).
 Descargo de responsabilidad: proyecto independiente, sin relacion con CELSYS ni con
 Clip Studio Paint. Se ofrece "tal cual", sin garantias; el autor no se hace responsable
 por perdida de datos ni por el uso que se le de. Ver DISCLAIMER mas abajo y LICENSE.
-Todos los derechos reservados: no se permite modificarlo ni distribuir versiones modificadas.
+Licencia MIT con atribucion: las versiones propias deben dar credito a Joky con un link a
+https://github.com/lightynti/rescate-clip
 
 Uso:
     python rescate_clip.py                      -> abre la ventana
@@ -28,7 +29,8 @@ from PIL import Image
 
 import fusion
 
-__version__ = "1.4"
+__version__ = "1.5"
+REPO_URL = "https://github.com/lightynti/rescate-clip"
 
 DISCLAIMER = (
     "Rescate CLIP es un proyecto independiente y no oficial. No tiene relación con CELSYS "
@@ -38,8 +40,8 @@ DISCLAIMER = (
     "ni evita la licencia de Clip Studio. Aun así, hacé copias de seguridad de tus archivos.\n\n"
     "El autor no se hace responsable por pérdida de datos, daños ni por el uso que se le dé.\n\n"
     "Hecho con IA (Claude, de Anthropic): puede contener errores.\n\n"
-    "© Joky. Todos los derechos reservados. No se permite modificar el programa ni "
-    "distribuir versiones modificadas.")
+    "© Joky — licencia MIT con atribución. Podés hacer tus propias versiones, siempre "
+    "dando crédito a Joky con un link al repositorio original:\n" + REPO_URL)
 
 TILE = 256
 STRIP = 512          # filas por tanda al fundir, para no gastar memoria de mas

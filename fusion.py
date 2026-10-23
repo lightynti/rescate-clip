@@ -7,7 +7,8 @@ premultiplicar, con forma (..., 3), y devuelve el color fusionado. Son las formu
 estandar (las de Photoshop / W3C); los modos "brillo" de Clip Studio (Sobreexponer
 (brillo) y Anadir (brillo)) se aproximan con su version comun.
 
-Parte de Rescate CLIP. (c) Joky, todos los derechos reservados; sin garantias (ver LICENSE).
+Parte de Rescate CLIP (c) Joky - https://github.com/lightynti/rescate-clip
+Licencia MIT con atribucion; sin garantias (ver LICENSE).
 """
 import numpy as np
 

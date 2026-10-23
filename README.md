@@ -16,8 +16,8 @@ así que sirve para recuperar un dibujo que quedó en un autoguardado.
 > daños ni por el uso que se le dé. Solo lee archivos `.clip`: no modifica, no activa ni
 > evita la licencia de Clip Studio. Usalo con archivos propios y hacé copias de seguridad.
 >
-> © Joky — **todos los derechos reservados**. Podés usarlo y compartir copias sin modificar;
-> **no se permite modificarlo ni distribuir versiones modificadas**. Ver [LICENSE](LICENSE).
+> © Joky — **licencia MIT con atribución**. Podés hacer tus propias versiones, siempre
+> **dando crédito a Joky con un link a este repositorio**. Ver [LICENSE](LICENSE).
 
 <p align="center"><img src="icono.png" width="96" alt="ícono"></p>
 
@@ -25,7 +25,7 @@ así que sirve para recuperar un dibujo que quedó en un autoguardado.
 
 En **[Releases](../../releases)**:
 
-- **`RescateCLIP_v1.4.zip`** (recomendado): descomprimilo y abrí `RescateCLIP.exe`.
+- **`RescateCLIP_v1.5.zip`** (recomendado): descomprimilo y abrí `RescateCLIP.exe`.
   Dejá la carpeta `_internal` al lado del `.exe`. Trae `LEEME.txt` y `LICENSE`.
 - **`RescateCLIP.exe`**: un solo archivo, más cómodo. Algunos antivirus lo marcan
   por error (es un falso positivo típico de los programas hechos con PyInstaller).
@@ -166,16 +166,17 @@ deducción de los códigos de modo de fusión). No hacen falta para usar el prog
 
 ## Licencia y descargo de responsabilidad
 
-© 2026 Joky — **todos los derechos reservados** ([LICENSE](LICENSE)).
+© 2026 Joky — **licencia MIT con atribución** ([LICENSE](LICENSE)).
 
-- ✅ Podés descargarlo, usarlo, leer el código y compartir copias **sin modificar**, gratis.
-- ❌ No se permite **modificarlo**, distribuir versiones modificadas, reutilizar el código
-  en otros programas ni venderlo sin permiso escrito del autor.
+- ✅ Podés usarlo, copiarlo, **modificarlo y hacer tus propias versiones** (hacé un fork),
+  incluso para uso comercial.
+- 📌 **Condición:** tu versión tiene que **dar crédito a Joky con un link a este
+  repositorio** (https://github.com/lightynti/rescate-clip) en un lugar visible, y
+  conservar el archivo de licencia.
+- ❌ No presentes tu versión como la oficial ni como hecha por Joky.
+- 🔒 **Este repositorio solo lo modifica su autor**: no acepta pull requests ni cambios
+  externos. Si querés cambiar algo, hacé tu propia versión.
 - Se ofrece **«tal cual», sin garantías**. El autor no se hace responsable por pérdida de
   datos, daños ni por el uso que se le dé.
 - No es oficial ni tiene relación con CELSYS / Clip Studio Paint.
 - Hecho con IA (Claude, de Anthropic): puede contener errores.
-
-Las versiones 1.2 y 1.3 se publicaron con licencia MIT; desde la 1.4 rige esta licencia.
-
-Este repositorio no acepta contribuciones externas (pull requests).

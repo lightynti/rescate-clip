@@ -43,6 +43,7 @@ recuperacion para que el autoguardado este siempre al dia.
 
 LICENCIA
 --------
-(c) Joky. Todos los derechos reservados. Podes usarlo y compartir copias sin
-modificar, gratis. No se permite modificarlo, distribuir versiones modificadas
-ni venderlo. Detalles en el archivo LICENSE.
+(c) Joky. Licencia MIT con atribucion. Podes usarlo, modificarlo y hacer tus
+propias versiones, siempre que des credito a Joky con un link al repositorio
+original: https://github.com/lightynti/rescate-clip
+Detalles en el archivo LICENSE.
