@@ -4,6 +4,8 @@ Rescate CLIP  -  Exporta a PNG, a resolucion completa, los dibujos guardados en
 archivos .clip de Clip Studio Paint (incluidos sus autoguardados de recuperacion),
 leyendo el archivo directamente, sin abrir Clip Studio.
 
+Hecho con IA (Claude, de Anthropic).
+
 Uso:
     python rescate_clip.py                      -> abre la ventana
     python rescate_clip.py dibujo.clip [s.png]  -> exporta por consola
@@ -19,9 +21,16 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-__version__ = "1.2"
+import fusion
+
+__version__ = "1.3"
 
 TILE = 256
+STRIP = 512          # filas por tanda al fundir, para no gastar memoria de mas
+# LayerComposite de Clip Studio -> modo de fusion. No esta documentado: es el orden del menu
+# de modos de Clip Studio (0 = Normal ... 27 = Dividir), confirmado comparando contra la
+# miniatura (6, 13 y 26). Los codigos que no esten aca se deducen con ClipFile.detect_modes.
+COMPOSITE_CODES = dict(enumerate(fusion.MODES))
 SQLITE_MAGIC = b"SQLite format 3\x00"
 MARKER = "BlockDataBegin".encode("utf-16-be")
 APPDATA = Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming")))
@@ -74,29 +83,60 @@ class ClipFile:
         from io import BytesIO
         return Image.open(BytesIO(blob)).convert("RGB")
 
-    def visible_layers(self):
-        """[(nombre, opacidad 0..1, offscreen_id)] de abajo hacia arriba."""
+    def layer_tree(self):
+        """Arbol de capas, cada nivel de abajo hacia arriba. Las carpetas tienen 'kids'."""
         cur = self.cur
         root = cur.execute("SELECT CanvasRootFolder FROM Canvas").fetchone()[0]
         info = {r[0]: r[1:] for r in cur.execute(
-            "SELECT MainId, LayerName, LayerNextIndex, LayerVisibility, LayerOpacity, "
-            "LayerRenderMipmap, LayerFirstChildIndex, LayerFolder FROM Layer")}
-        out = []
+            "SELECT MainId, LayerName, LayerNextIndex, LayerVisibility, LayerOpacity, LayerRenderMipmap, "
+            "LayerFirstChildIndex, LayerFolder, LayerComposite, LayerClip FROM Layer")}
+        seen = set()
 
         def walk(mid):
-            while mid and mid in info:
-                name, nxt, vis, op, rmip, first, folder = info[mid]
-                if vis & 1:
-                    if folder and first:
-                        walk(first)
-                    else:
-                        off = self._offscreen_of(rmip)
-                        if off:
-                            out.append((name, (op or 0) / 256.0, off))
+            nodes = []
+            while mid and mid in info and mid not in seen:
+                seen.add(mid)
+                name, nxt, vis, op, rmip, first, folder, comp, clip = info[mid]
+                node = dict(id=mid, name=name, visible=bool((vis or 0) & 1), opacity=(op or 0) / 256.0,
+                            comp=comp or 0, clip=bool(clip), folder=bool(folder))
+                if folder:
+                    node["kids"] = walk(first)
+                else:
+                    node["off"] = self._offscreen_of(rmip)
+                nodes.append(node)
                 mid = nxt
+            return nodes
 
-        walk(info[root][5])
+        return walk(info[root][5])
+
+    def visible_layers(self, tree=None):
+        """Capas con pixeles que se ven (dentro de carpetas visibles), de abajo hacia arriba."""
+        out = []
+
+        def rec(nodes):
+            for n in nodes:
+                if n["visible"]:
+                    if n["folder"]:
+                        rec(n["kids"])
+                    elif n["off"]:
+                        out.append(n)
+
+        rec(tree if tree is not None else self.layer_tree())
         return out
+
+    def blend_codes(self):
+        """Codigos de fusion en uso por capas o carpetas visibles."""
+        codes = set()
+
+        def rec(nodes):
+            for n in nodes:
+                if n["visible"]:
+                    codes.add(n["comp"])
+                    if n["folder"]:
+                        rec(n["kids"])
+
+        rec(self.layer_tree())
+        return codes
 
     def _offscreen_of(self, rmip):
         r = self.cur.execute("SELECT BaseMipmapInfo FROM Mipmap WHERE MainId=?", (rmip,)).fetchone()
@@ -106,7 +146,7 @@ class ClipFile:
         return r[0] if r else None
 
     def decode_layer(self, off):
-        """Pixeles de una capa a tamano de lienzo: (H, W, 4) BGRA o None si no hay raster."""
+        """Pixeles de una capa a tamano de lienzo: (H, W, 4) RGBA o None si no hay raster."""
         row = self.cur.execute("SELECT Attribute, BlockData FROM Offscreen WHERE MainId=?", (off,)).fetchone()
         if not row:
             return None
@@ -132,7 +172,8 @@ class ClipFile:
                 raw = np.frombuffer(zlib.decompressobj().decompress(blob[zs:]), np.uint8)
                 if len(raw) == TILE * TILE * 5:
                     # tile = plano de alfa (256x256) + color BGRX intercalado (256x256x4)
-                    tile = raw[TILE * TILE:].reshape(TILE, TILE, 4).copy()
+                    tile = np.empty((TILE, TILE, 4), np.uint8)
+                    tile[:, :, :3] = raw[TILE * TILE:].reshape(TILE, TILE, 4)[:, :, 2::-1]
                     tile[:, :, 3] = raw[:TILE * TILE].reshape(TILE, TILE)
                     r, c = divmod(idx, gw)
                     if r < gh:
@@ -147,31 +188,134 @@ class ClipFile:
         canv[:h, :w] = full[:h, :w]
         return canv
 
-    def render(self, transparent=False, progress=None):
-        """Aplana las capas visibles a resolucion completa. Devuelve una imagen PIL."""
-        layers = self.visible_layers()
-        H, W = self.height, self.width
-        col = np.zeros((H, W, 3), np.float32)    # color premultiplicado
+    def _pixels(self, off, size, cache):
+        """Pixeles RGBA de una capa al tamano pedido (reduciendo con alfa premultiplicado)."""
+        if cache is not None and off in cache:
+            return cache[off]
+        px = self.decode_layer(off)
+        if px is not None and size != (self.width, self.height):
+            px = np.asarray(Image.fromarray(px, "RGBA").convert("RGBa")
+                            .resize(size, Image.BILINEAR).convert("RGBA"))
+        if cache is not None:
+            cache[off] = px
+        return px
+
+    def flatten(self, size=None, modes=None, progress=None, cache=None):
+        """Compone las capas visibles. Devuelve (color premultiplicado, alfa) en 0..1.
+
+        size: (ancho, alto) para componer reducido. modes: {codigo: modo} que se suma a
+        COMPOSITE_CODES. cache: dict para reusar capas decodificadas entre llamadas."""
+        size = tuple(size or (self.width, self.height))
+        W, H = size
+        tree = self.layer_tree()
+        table = {**COMPOSITE_CODES, **(modes or {})}
+        total = len(self.visible_layers(tree))
+        done = [0]
+
+        def mode_of(n):
+            return table.get(n["comp"], "normal")
+
+        def fuse(col, alpha, rgba_or_pair, op, mode, base=None):
+            for y0 in range(0, H, STRIP):
+                y1 = min(H, y0 + STRIP)
+                if isinstance(rgba_or_pair, tuple):           # carpeta: (color premult., alfa)
+                    sc, sa = rgba_or_pair[0][y0:y1], rgba_or_pair[1][y0:y1]
+                    cs, a = sc / np.maximum(sa, fusion.EPS), sa * op
+                else:
+                    p = rgba_or_pair[y0:y1]
+                    cs = p[:, :, :3].astype(np.float32) / 255
+                    a = p[:, :, 3:4].astype(np.float32) * (op / 255)
+                if base is not None:                          # recorte: solo donde hay capa base
+                    a *= base[0][y0:y1, :, 3:4].astype(np.float32) * (base[1] / 255)
+                fusion.composite(col[y0:y1], alpha[y0:y1], cs, a, mode)
+
+        def draw(nodes, col, alpha):
+            base = None          # (pixeles, opacidad) de la ultima capa sin recorte
+            base_hidden = False
+            for n in nodes:
+                if n["clip"] and base_hidden:
+                    continue     # si la base esta oculta, lo recortado tampoco se ve
+                if not n["visible"]:
+                    if not n["clip"]:
+                        base, base_hidden = None, True
+                    continue
+                if n["folder"]:
+                    if n["opacity"] < 1 or n["comp"] != 0:
+                        # carpeta con opacidad o modo propio: se compone aislada
+                        sub = (np.zeros((H, W, 3), np.float32), np.zeros((H, W, 1), np.float32))
+                        draw(n["kids"], *sub)
+                        fuse(col, alpha, sub, n["opacity"], mode_of(n))
+                        del sub
+                    else:
+                        draw(n["kids"], col, alpha)
+                    if not n["clip"]:
+                        base, base_hidden = None, False
+                    continue
+                if progress:
+                    progress(done[0], total, n["name"])
+                done[0] += 1
+                px = self._pixels(n["off"], size, cache) if n["off"] else None
+                if px is None:
+                    if not n["clip"]:
+                        base, base_hidden = None, False
+                    continue
+                fuse(col, alpha, px, n["opacity"], mode_of(n), base if n["clip"] else None)
+                if not n["clip"]:
+                    base, base_hidden = (px, n["opacity"]), False
+
+        col = np.zeros((H, W, 3), np.float32)
         alpha = np.zeros((H, W, 1), np.float32)
-        for n, (name, op, off) in enumerate(layers):
-            if progress:
-                progress(n, len(layers), name)
-            px = self.decode_layer(off)
-            if px is None:
-                continue
-            a = px[:, :, 3:4].astype(np.float32) * (op / 255.0)
-            rgb = px[:, :, 2::-1].astype(np.float32)
-            col = rgb * a + col * (1 - a)
-            alpha = a + alpha * (1 - a)
-            del px, a, rgb
+        draw(tree, col, alpha)
         if progress:
-            progress(len(layers), len(layers), "")
+            progress(total, total, "")
+        return col, alpha
+
+    def render(self, transparent=False, progress=None, modes=None):
+        """Aplana las capas visibles a resolucion completa. Devuelve una imagen PIL."""
+        col, alpha = self.flatten(modes=modes, progress=progress)
         if transparent:
-            safe = np.where(alpha > 0, alpha, 1)
-            out = np.dstack([col / safe, alpha * 255])
-            return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
-        out = col + 255.0 * (1 - alpha)          # fondo papel blanco
-        return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGB")
+            out = np.dstack([col / np.maximum(alpha, fusion.EPS), alpha]) * 255
+            return Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8), "RGBA")
+        out = (col + (1 - alpha)) * 255          # fondo papel blanco
+        return Image.fromarray(np.clip(out, 0, 255).round().astype(np.uint8), "RGB")
+
+    def detect_modes(self, codes=None, progress=None, report=None):
+        """Deduce el modo de fusion de codigos desconocidos comparando contra la miniatura.
+
+        Para cada codigo prueba todos los modos sobre la zona donde lo usan las capas y se
+        queda con el que mejor reproduce la miniatura de Clip Studio. Devuelve {codigo: modo}."""
+        prev = self.preview()
+        if prev is None:
+            return {}
+        tree = self.layer_tree()
+        if codes is None:
+            codes = self.blend_codes() - set(COMPOSITE_CODES)
+        target = np.asarray(prev, np.float32) / 255
+        size = prev.size
+        cache = {}
+        self.flatten(size=size, cache=cache)          # llena el cache a baja resolucion
+        found = {}
+        for code in sorted(codes):
+            zone = np.zeros(target.shape[:2], bool)
+            for n in self.visible_layers(tree):
+                px = cache.get(n["off"])
+                if n["comp"] == code and px is not None:
+                    zone |= px[:, :, 3] > 8
+            if zone.sum() < 50:
+                continue                               # capa vacia: no hay como saberlo
+            errs = {}
+            for name in fusion.MODES:
+                if progress:
+                    progress("Probando %s para el código %d..." % (fusion.MODES[name][0], code))
+                col, alpha = self.flatten(size=size, modes={**found, code: name}, cache=cache)
+                img = col + (1 - alpha)
+                errs[name] = float(np.abs(img - target)[zone].mean() * 255)
+            best = min(errs, key=errs.get)
+            if report:
+                report(code, errs)
+            if errs[best] < errs["normal"] * 0.9 and errs[best] < errs["normal"] - 0.1:   # mejora clara
+                found[code] = best
+        return found
 
     def close(self):
         self.con.close()
@@ -229,13 +373,37 @@ def find_backups(folder):
     return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
 
 
+def resolve_modes(clip, progress=None):
+    """Modos aprendidos antes + deduce (y recuerda) los codigos de fusion desconocidos."""
+    cfg = load_config()
+    learned = {int(k): v for k, v in cfg.get("modos", {}).items() if v in fusion.MODES}
+    unknown = clip.blend_codes() - set(COMPOSITE_CODES) - set(learned)
+    if unknown:
+        found = clip.detect_modes(codes=unknown, progress=progress)
+        if found:
+            learned.update(found)
+            cfg["modos"] = {str(k): v for k, v in learned.items()}
+            save_config(cfg)
+    return learned
+
+
+def age_text(path):
+    mins = (datetime.now().timestamp() - Path(path).stat().st_mtime) / 60
+    if mins < 60:
+        return "hace %d min" % max(mins, 0)
+    if mins < 48 * 60:
+        return "hace %d h" % (mins / 60)
+    return "hace %d días" % (mins / 1440)
+
+
 # ----------------------------------------------------------------- consola
 
 def cli(src, dst=None):
     clip = ClipFile(src)
     dst = Path(dst) if dst else Path(src).with_suffix(".png")
-    print("Lienzo %dx%d" % (clip.width, clip.height))
-    img = clip.render(progress=lambda i, n, name: name and print("  [%d/%d] %s" % (i + 1, n, name)))
+    print("Lienzo %dx%d  (archivo guardado %s)" % (clip.width, clip.height, age_text(src)))
+    modes = resolve_modes(clip, progress=print)
+    img = clip.render(modes=modes, progress=lambda i, n, name: name and print("  [%d/%d] %s" % (i + 1, n, name)))
     img.save(dst)
     d = similarity(img, clip.preview())
     print("Guardado: %s  (%dx%d)" % (dst, img.width, img.height))
@@ -272,6 +440,12 @@ def gui():
     ttk.Button(left, text="Abrir otro .clip...", command=lambda: open_other()).pack(fill="x")
     ttk.Button(left, text="Elegir carpeta de autoguardados...", command=lambda: choose_dir()).pack(fill="x", pady=(4, 0))
     ttk.Button(left, text="Actualizar lista", command=lambda: refresh()).pack(fill="x", pady=(4, 0))
+    ttk.Label(left, text="Consejo: en las Preferencias de Clip Studio (sección Archivo) bajá el "
+                         "intervalo de los datos de recuperación, así estos autoguardados están "
+                         "siempre al día.",
+              font=("Segoe UI", 8), foreground="#666", wraplength=270).pack(anchor="w", pady=(8, 0))
+    ttk.Label(left, text="Hecho con IA (Claude, de Anthropic).",
+              font=("Segoe UI", 8), foreground="#999").pack(anchor="w", pady=(6, 0))
 
     right = ttk.Frame(root, padding=10)
     right.pack(side="left", fill="both", expand=True)
@@ -341,8 +515,8 @@ def gui():
         else:
             canvas.configure(image="", text="(sin vista previa)")
         n = len(clip.visible_layers())
-        info.configure(text="%s\nLienzo %d × %d px  ·  %d capas visibles" % (
-            Path(path).name, clip.width, clip.height, n))
+        info.configure(text="%s\nLienzo %d × %d px  ·  %d capas visibles  ·  guardado %s" % (
+            Path(path).name, clip.width, clip.height, n, age_text(path)))
         status.configure(text="")
         bar["value"] = 0
 
@@ -397,7 +571,8 @@ def gui():
                     root.after(0, lambda: status.configure(text="El archivo cambió, releyendo..."))
                     clip.close()
                     clip = state["clip"] = ClipFile(clip.path)
-                img = clip.render(transparent=want_transparent, progress=progress)
+                modes = resolve_modes(clip, progress=lambda text: root.after(0, lambda: status.configure(text=text)))
+                img = clip.render(transparent=want_transparent, progress=progress, modes=modes)
                 img.save(dst)
                 d = similarity(img, clip.preview())
                 msg = "Listo: %s (%d × %d)" % (Path(dst).name, img.width, img.height)
