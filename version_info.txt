@@ -1,0 +1,28 @@
+# Informacion de version que PyInstaller incrusta en RescateCLIP.exe
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 2, 0, 0),
+    prodvers=(1, 2, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('040A04B0', [
+        StringStruct('CompanyName', 'Joky'),
+        StringStruct('FileDescription', 'Rescate CLIP - exporta dibujos .clip a PNG'),
+        StringStruct('FileVersion', '1.2.0.0'),
+        StringStruct('InternalName', 'RescateCLIP'),
+        StringStruct('LegalCopyright', 'Joky'),
+        StringStruct('OriginalFilename', 'RescateCLIP.exe'),
+        StringStruct('ProductName', 'Rescate CLIP'),
+        StringStruct('ProductVersion', '1.2.0.0')
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [0x040A, 1200])])
+  ]
+)

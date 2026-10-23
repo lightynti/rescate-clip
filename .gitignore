@@ -1,0 +1,11 @@
+__pycache__/
+build/
+dist/
+*.spec
+# los ejecutables van como descargas del Release, no en el codigo
+*.exe
+*.zip
+# imagenes exportadas (dibujos)
+*.png
+!icono.png
+*_extraido/
