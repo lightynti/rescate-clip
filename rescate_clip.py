@@ -6,6 +6,11 @@ leyendo el archivo directamente, sin abrir Clip Studio.
 
 Hecho con IA (Claude, de Anthropic).
 
+Descargo de responsabilidad: proyecto independiente, sin relacion con CELSYS ni con
+Clip Studio Paint. Se ofrece "tal cual", sin garantias; el autor no se hace responsable
+por perdida de datos ni por el uso que se le de. Ver DISCLAIMER mas abajo y LICENSE.
+Todos los derechos reservados: no se permite modificarlo ni distribuir versiones modificadas.
+
 Uso:
     python rescate_clip.py                      -> abre la ventana
     python rescate_clip.py dibujo.clip [s.png]  -> exporta por consola
@@ -23,7 +28,18 @@ from PIL import Image
 
 import fusion
 
-__version__ = "1.3"
+__version__ = "1.4"
+
+DISCLAIMER = (
+    "Rescate CLIP es un proyecto independiente y no oficial. No tiene relación con CELSYS "
+    "ni con Clip Studio Paint, que son marcas de sus respectivos dueños.\n\n"
+    "Se ofrece «tal cual», sin garantías de ningún tipo. Usalo solo con archivos propios o "
+    "que tengas derecho a usar. El programa solo lee archivos .clip: no modifica, no activa "
+    "ni evita la licencia de Clip Studio. Aun así, hacé copias de seguridad de tus archivos.\n\n"
+    "El autor no se hace responsable por pérdida de datos, daños ni por el uso que se le dé.\n\n"
+    "Hecho con IA (Claude, de Anthropic): puede contener errores.\n\n"
+    "© Joky. Todos los derechos reservados. No se permite modificar el programa ni "
+    "distribuir versiones modificadas.")
 
 TILE = 256
 STRIP = 512          # filas por tanda al fundir, para no gastar memoria de mas
@@ -399,6 +415,8 @@ def age_text(path):
 # ----------------------------------------------------------------- consola
 
 def cli(src, dst=None):
+    print("Rescate CLIP %s - sin garantias, el autor no se hace responsable por su uso "
+          "(ver LICENSE). Hecho con IA." % __version__)
     clip = ClipFile(src)
     dst = Path(dst) if dst else Path(src).with_suffix(".png")
     print("Lienzo %dx%d  (archivo guardado %s)" % (clip.width, clip.height, age_text(src)))
@@ -444,8 +462,10 @@ def gui():
                          "intervalo de los datos de recuperación, así estos autoguardados están "
                          "siempre al día.",
               font=("Segoe UI", 8), foreground="#666", wraplength=270).pack(anchor="w", pady=(8, 0))
-    ttk.Label(left, text="Hecho con IA (Claude, de Anthropic).",
+    ttk.Label(left, text="Hecho con IA (Claude, de Anthropic). Sin garantías.",
               font=("Segoe UI", 8), foreground="#999").pack(anchor="w", pady=(6, 0))
+    ttk.Button(left, text="Aviso legal", command=lambda: messagebox.showinfo(
+        "Rescate CLIP - Aviso legal", DISCLAIMER)).pack(fill="x", pady=(4, 0))
 
     right = ttk.Frame(root, padding=10)
     right.pack(side="left", fill="both", expand=True)
@@ -592,8 +612,19 @@ def gui():
         if dst and messagebox.askyesno("Rescate CLIP", msg + "\n\n¿Abrir la carpeta?"):
             os.startfile(str(Path(dst).parent))
 
+    def start():
+        cfg = load_config()
+        if not cfg.get("aviso_aceptado"):
+            if not messagebox.askokcancel(
+                    "Rescate CLIP - Aviso legal", DISCLAIMER + "\n\n¿Aceptás estas condiciones?"):
+                root.destroy()
+                return
+            cfg["aviso_aceptado"] = True
+            save_config(cfg)
+        refresh()
+
     lst.bind("<<ListboxSelect>>", on_select)
-    root.after(150, refresh)
+    root.after(150, start)
     root.mainloop()
 
 

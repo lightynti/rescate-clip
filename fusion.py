@@ -6,6 +6,8 @@ Colores en 0..1. Cada modo recibe el color de abajo (b) y el de la capa (s), amb
 premultiplicar, con forma (..., 3), y devuelve el color fusionado. Son las formulas
 estandar (las de Photoshop / W3C); los modos "brillo" de Clip Studio (Sobreexponer
 (brillo) y Anadir (brillo)) se aproximan con su version comun.
+
+Parte de Rescate CLIP. (c) Joky, todos los derechos reservados; sin garantias (ver LICENSE).
 """
 import numpy as np
 

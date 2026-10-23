@@ -1,0 +1,48 @@
+RESCATE CLIP - LEEME
+====================
+
+Exporta dibujos de Clip Studio Paint (.clip) a PNG a resolucion completa,
+leyendo el archivo directamente, sin abrir Clip Studio. Tambien encuentra sola
+la carpeta de autoguardados de recuperacion de Clip Studio.
+
+Pagina del proyecto: https://github.com/lightynti/rescate-clip
+
+Hecho con IA (Claude, de Anthropic).
+
+
+DESCARGO DE RESPONSABILIDAD
+---------------------------
+- Proyecto independiente y no oficial, sin relacion con CELSYS ni con
+  Clip Studio Paint (marcas de sus respectivos duenos).
+- Se ofrece "tal cual", SIN GARANTIAS. El autor no se hace responsable por
+  perdida de datos, danos ni por el uso que se le de.
+- Solo lee archivos .clip: no modifica, no activa ni evita la licencia de
+  Clip Studio. Usalo con archivos propios y hace copias de seguridad.
+- Hecho con IA: puede contener errores.
+
+
+COMO SE USA
+-----------
+1. Abri RescateCLIP.exe (si bajaste el .zip, deja la carpeta _internal al lado
+   del .exe). La primera vez te muestra este aviso para aceptar.
+2. A la izquierda aparecen los autoguardados de Clip Studio, el mas nuevo
+   arriba. Tambien podes usar "Abrir otro .clip...".
+3. "Exportar PNG a resolucion completa..." y elegi donde guardarlo.
+
+Si Windows muestra "Windows protegio su PC": Mas informacion -> Ejecutar de
+todas formas (el programa no esta firmado digitalmente).
+
+
+RECOMENDADO
+-----------
+Rescate CLIP lee los autoguardados que Clip Studio escribe cada cierto tiempo.
+Lo que dibujaste despues del ultimo autoguardado no aparece. En las
+Preferencias de Clip Studio (seccion Archivo) baja el intervalo de los datos de
+recuperacion para que el autoguardado este siempre al dia.
+
+
+LICENCIA
+--------
+(c) Joky. Todos los derechos reservados. Podes usarlo y compartir copias sin
+modificar, gratis. No se permite modificarlo, distribuir versiones modificadas
+ni venderlo. Detalles en el archivo LICENSE.
